@@ -1,0 +1,133 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Darragh McLernon"
+date: "29/01/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/darraghmclernon/Documents/coursera/practical_machine_learning/")
+library(e1071)
+
+
+```
+
+# Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+The purpose of this assignment is to use data collected from the belt, forearm, arm and dumbell of six participants while they are exercising, and classify the data into different "classe". The final result should be an indication into how the participants are performing the exercise.
+
+# Data Analysis
+
+The data for this assignment was kindly provided by http://groupware.les.inf.puc-rio.br/har. There are two data sets provided, a training data set and a test data set. The training data will be loaded and analysed. The test data will be used to verify the training model so it will be loaded but will remain untouched for the analysis. NA values will be removed from the training set.
+
+```{r }
+test_data <- read.csv("./pml-testing.csv")
+training_data <- read.csv("./pml-training.csv", na.strings = c("", "NA"))
+dim(training_data)
+```
+
+The training data contains 19622 observations across 160 variables. At a glance there appears to be many variables containing mostly NA values, these will be removed. See apendix for a sample of the data.
+The next step is to remove variables that are not needed, starting with the ones mostly containing NA values.
+
+```{r}
+#Find the colums with full sets of data (colums that contain data in every row)
+is_data  <- apply(!is.na(training_data), 2, sum) > 19621
+
+#Create a new data set with only the colums with a full data set
+training_set <- training_data[, is_data]
+
+dim(training_set)
+
+```
+
+This leaves us with a training set with 19622 observations across 60 variables. There are further columns we can remove which will not be used to build the model. 
+
+
+```{r}
+
+columns_to_remove = c('X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window', 'num_window')
+
+training_set <- training_set[, -which(names(training_set) %in% columns_to_remove)]
+
+dim(training_set)
+
+```
+
+Our final training data set contains 19662 observations across 53 variables. 
+
+
+# Training data subsampling and predictive analysis
+
+In order to create a predictive model it is helpful to create a subsample of the training data. This will allow the model to be trained without using the testing set, which is best practice. The training set will be split into two smaller sets named, sub_train and sub_test. The caret package is required to acomplish this.
+
+```{r}
+
+library(caret)
+sub_sample <- createDataPartition(y=training_set$classe, p=0.6, list=FALSE)
+sub_train <- training_set[sub_sample,]
+sub_test <- training_set[-sub_sample, ]
+dim(sub_train);dim(sub_test)
+
+```
+
+The sub-samples results in 11776 and 7846 observations respectively.
+
+### Random Forest 
+
+One method of analysis is to perform a random forest analysis. This method creates a number of decision trees to identify a classification. All of the trees classification weights are culumated to identify the most likely classification for each data set. The model is built below;
+
+```{r, cache=TRUE}
+set.seed(12345)
+
+model_control <- trainControl(method="cv", number=3, verboseIter=FALSE)
+train_model_forest <- train(classe ~ ., data=sub_train, method="rf", trControl=model_control)
+train_model_forest
+
+```
+
+
+Appling the model to the test data set gives the predictions below;
+
+```{r, cache=TRUE}
+
+forest_prediction <- predict(train_model_forest, newdata=sub_test)
+pred_matrix <- confusionMatrix(forest_prediction, sub_test$classe)
+pred_matrix
+
+```
+
+Judging from the confusion matrix it is apparent that this prediction model is very accurate. The highest number of miss-classifications is 14 for the 'D' classe and the overall accuracy is 0.9936. This model will be used to predict the classe of the original test data.
+
+# Predicting the original test data
+
+The final step of this assignment is to predict the classe of the origin test data. The model created from the random forest will be used to accomplish this. Below is the predicted classe of each of the 20 test observations.
+
+```{r}
+
+classification_prediction <- predict(train_model_forest,test_data,type='raw')
+
+classification_prediction
+
+```
+
+
+
+# References 
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+
+# Apendix 
+
+## Training data sample - untouched
+
+```{r}
+test_data_sample <- read.csv("./pml-testing.csv")
+
+str(test_data_sample)
+```
